@@ -1,0 +1,8 @@
+{
+  "name": "Reporte Académico Estudiantil",
+  "description": "Sistema de seguimiento y generación de reportes de cumplimiento de actividades de estudiantes para padres de familia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

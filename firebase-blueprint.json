@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "Level": {
+      "title": "Level",
+      "description": "An academic level or class grade",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "The name of the level"
+        },
+        "createdAt": {
+          "type": "timestamp"
+        }
+      },
+      "required": ["name", "createdAt"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "A student in a specific level with their progress data",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "The student's full name"
+        },
+        "levelId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "The ID of the level this student belongs to"
+        },
+        "progress": {
+          "type": "object",
+          "description": "JSON representation of the student's progress matrix"
+        },
+        "createdAt": {
+          "type": "timestamp"
+        },
+        "updatedAt": {
+          "type": "timestamp"
+        }
+      },
+      "required": ["name", "levelId", "progress", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}/levels/{levelId}": {
+      "schema": {
+        "$ref": "#/entities/Level"
+      },
+      "description": "Levels managed by a specific user (teacher)"
+    },
+    "users/{userId}/students/{studentId}": {
+      "schema": {
+        "$ref": "#/entities/Student"
+      },
+      "description": "Students managed by a specific user (teacher)"
+    }
+  }
+}
