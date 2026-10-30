@@ -98,11 +98,12 @@ export const TASK_CATEGORIES: { id: TaskCategory; label: string; fullName: strin
 ];
 
 export function getTasksForSubjectAndWeek(subjectName: string, week: number): { id: TaskCategory; label: string; fullName: string }[] {
-  const isHumanOrBio = subjectName === 'Humanísticas' || subjectName === 'Ciencias Biológicas';
+  const sNorm = subjectName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const isHumanOrBio = sNorm.includes('human') || sNorm.includes('biolog');
   
   return TASK_CATEGORIES.filter(cat => {
     if (cat.id === 'a321' && !isHumanOrBio) return false;
-    if (subjectName === 'Empresarial' && week === 11 && cat.id === 'quiz') return false;
+    if (sNorm.includes('empresar') && week === 11 && cat.id === 'quiz') return false;
     return true;
   });
 }

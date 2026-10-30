@@ -1,5 +1,4 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
     // Global Safety Net
@@ -22,6 +21,15 @@ service cloud.firestore {
         && data.name.size() > 0 
         && data.name.size() <= 100
         && data.createdAt == request.time;
+    }
+
+    function isValidLevelUpdate(data) {
+      return data.keys().hasAll(['name', 'createdAt']) 
+        && data.keys().size() == 2
+        && data.name is string 
+        && data.name.size() > 0 
+        && data.name.size() <= 100
+        && data.createdAt == existing().createdAt;
     }
 
     // Validation Blueprint for Student
@@ -63,21 +71,24 @@ service cloud.firestore {
       match /levels/{levelId} {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId) 
-          && isValidId(levelId) 
-          && isValidLevel(incoming());
-        allow update: if false; // Levels are currently just name, no update needed yet. If needed, can be added.
+           && isValidId(levelId) 
+           && isValidLevel(incoming());
+        allow update: if isOwner(userId) 
+           && isValidId(levelId) 
+           && isValidLevelUpdate(incoming())
+           && incoming().diff(existing()).affectedKeys().hasOnly(['name']);
         allow delete: if isOwner(userId) && isValidId(levelId);
       }
 
       match /students/{studentId} {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId) 
-          && isValidId(studentId) 
-          && isValidStudent(incoming());
+           && isValidId(studentId) 
+           && isValidStudent(incoming());
         allow update: if isOwner(userId) 
-          && isValidId(studentId)
-          && isValidStudentUpdate(incoming())
-          && incoming().diff(existing()).affectedKeys().hasAny(['name', 'levelId', 'progress', 'updatedAt']);
+           && isValidId(studentId)
+           && isValidStudentUpdate(incoming())
+           && incoming().diff(existing()).affectedKeys().hasAny(['name', 'levelId', 'progress', 'updatedAt']);
         allow delete: if isOwner(userId) && isValidId(studentId);
       }
     }

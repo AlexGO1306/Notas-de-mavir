@@ -1,0 +1,69 @@
+--- src/App.tsx
++++ src/App.tsx
+@@ -155,20 +155,16 @@
+     setEditingStudentName('');
+   };
+ 
+-  const handleCellClick = (student: Student, subjectName: string, week: number, taskId: TaskCategory) => {
++  const getStatusFromInput = (val: string): TaskStatus => {
++    const s = val.trim().toLowerCase();
++    if (['10', 'cumplido', 'c', '1', 'x'].includes(s)) return 'cumplido';
++    if (['0', 'no_cumplido', 'n', 'falta'].includes(s)) return 'no_cumplido';
++    if (['p', 'pendiente'].includes(s)) return 'pendiente';
++    return null;
++  };
++
++  const handleCellChange = (student: Student, subjectName: string, week: number, taskId: TaskCategory, value: string) => {
+     const currentProgress = pendingChanges[student.id] || student.progress || getInitialProgress();
+     const subjectData = currentProgress[subjectName] || {};
+     const weekData = subjectData[week] || { weekNumber: week, tasks: { investiga: null, aplica: null, quiz: null, a321: null } };
+-    const currentStatus = weekData.tasks?.[taskId] || null;
+-
+-    let nextStatus: TaskStatus = null;
+-    if (currentStatus === null) nextStatus = 'cumplido';
+-    else if (currentStatus === 'cumplido') nextStatus = 'pendiente';
+-    else if (currentStatus === 'pendiente') nextStatus = 'no_cumplido';
+-    else if (currentStatus === 'no_cumplido') nextStatus = null;
++    const nextStatus = getStatusFromInput(value);
+ 
+     const nextProgress: ProgressData = {
+       ...currentProgress,
+@@ -185,6 +181,39 @@
+     }));
+   };
+ 
++  const handleCellPaste = (e: React.ClipboardEvent<HTMLInputElement>, startStudentIdx: number, subjectName: string, week: number, taskId: TaskCategory) => {
++    e.preventDefault();
++    const text = e.clipboardData.getData('text');
++    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l !== '');
++    
++    setPendingChanges(prev => {
++      const nextChanges = { ...prev };
++      for (let i = 0; i < lines.length; i++) {
++        const student = currentStudents[startStudentIdx + i];
++        if (!student) break;
++        
++        const nextStatus = getStatusFromInput(lines[i]);
++        const currentProgress = nextChanges[student.id] || student.progress || getInitialProgress();
++        const subjectData = currentProgress[subjectName] || {};
++        const weekData = subjectData[week] || { weekNumber: week, tasks: { investiga: null, aplica: null, quiz: null, a321: null } };
++        
++        nextChanges[student.id] = {
++          ...currentProgress,
++          [subjectName]: {
++            ...subjectData,
++            [week]: {
++              ...weekData,
++              tasks: {
++                ...weekData.tasks,
++                [taskId]: nextStatus
++              }
++            }
++          }
++        };
++      }
++      return nextChanges;
++    });
++  };
++
+   const handleSaveChanges = async () => {

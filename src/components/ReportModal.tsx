@@ -1,9 +1,23 @@
 import React, { useRef, useState } from 'react';
 import { toPng } from 'html-to-image';
-import { Download, XIcon, Award, AlertCircle, Calendar, GraduationCap, UserCircle } from 'lucide-react';
+import {
+  Download,
+  XIcon,
+  Award,
+  AlertCircle,
+  Calendar,
+  GraduationCap,
+  UserCircle,
+  Send,
+  Copy,
+  Check,
+  ExternalLink,
+  MessageSquare,
+  Sparkles
+} from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { ProgressData } from '../types';
-import { SUBJECT_CONFIGS } from '../constants';
+import { SUBJECT_CONFIGS, TASK_CATEGORIES } from '../constants';
 
 interface ReportModalProps {
   studentName: string;
@@ -15,6 +29,12 @@ interface ReportModalProps {
 export function ReportModal({ studentName, levelName, data, onClose }: ReportModalProps) {
   const reportRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isCopyingImage, setIsCopyingImage] = useState(false);
+  const [copiedImage, setCopiedImage] = useState(false);
+  const [copiedText, setCopiedText] = useState(false);
+  const [showMessagePreview, setShowMessagePreview] = useState(false);
+
+  const DREAMCLASS_URL = 'https://portal.mavir.org/teachers-app/periods/45/dashboard';
 
   const handleExport = async () => {
     if (!reportRef.current) return;
@@ -39,6 +59,45 @@ export function ReportModal({ studentName, levelName, data, onClose }: ReportMod
     }
   };
 
+  const copyImageToClipboard = async (): Promise<boolean> => {
+    if (!reportRef.current) return false;
+    try {
+      setIsCopyingImage(true);
+      await new Promise(r => setTimeout(r, 120));
+      const dataUrl = await toPng(reportRef.current, {
+        quality: 1,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff'
+      });
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+
+      if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+        const item = new ClipboardItem({ 'image/png': blob });
+        await navigator.clipboard.write([item]);
+        setCopiedImage(true);
+        setTimeout(() => setCopiedImage(false), 4000);
+        return true;
+      } else {
+        const link = document.createElement('a');
+        link.download = `reporte-academico-${studentName || 'estudiante'}.png`;
+        link.href = dataUrl;
+        link.click();
+        return true;
+      }
+    } catch (err) {
+      console.error('Failed to copy image to clipboard', err);
+      return false;
+    } finally {
+      setIsCopyingImage(false);
+    }
+  };
+
+  const handleDispatchToDreamClass = async () => {
+    await copyImageToClipboard();
+    window.open(DREAMCLASS_URL, '_blank', 'noopener,noreferrer');
+  };
+
   let totalEvaluated = 0;
   let totalCompleted = 0;
   let totalIncomplete = 0;
@@ -61,7 +120,8 @@ export function ReportModal({ studentName, levelName, data, onClose }: ReportMod
           } else if (status === 'no_cumplido' || status === 'pendiente') {
             subIncomplete++;
             totalIncomplete++;
-            pendingTasksList.push({ subject, week, taskName: taskKey.toUpperCase(), status });
+            const taskLabel = TASK_CATEGORIES.find(c => c.id === taskKey)?.fullName || taskKey.toUpperCase();
+            pendingTasksList.push({ subject, week, taskName: taskLabel, status });
           }
         }
       });
@@ -97,30 +157,137 @@ export function ReportModal({ studentName, levelName, data, onClose }: ReportMod
 
   const today = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
 
+  const directedMessage = `Estimado(a) representante de ${studentName || 'el/la estudiante'}:
+
+Reciba un cordial saludo de Mavir School. Le comparto el informe oficial de cumplimiento académico actualizado correspondiente al presente período formativo.
+• Rendimiento global: ${percentage}% de actividades cumplidas.
+• Actividades pendientes registradas: ${pendingTasksList.length}.
+
+Le invitamos a revisar la imagen adjunta para conocer el detalle de cada asignatura y semana de estudio.
+
+Atentamente,
+Docente Mavir School`;
+
+  const copyMessageToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(directedMessage);
+      setCopiedText(true);
+      setTimeout(() => setCopiedText(false), 3000);
+    } catch (err) {
+      console.error('Failed to copy text', err);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[95vh] overflow-hidden">
         
         {/* Header Actions */}
-        <div className="flex items-center justify-between p-4 border-b bg-slate-50">
-          <h2 className="text-xl font-medium tracking-tight text-slate-800">Vista Previa del Informe</h2>
-          <div className="flex gap-2">
+        <div className="flex flex-wrap items-center justify-between p-3.5 sm:p-4 border-b bg-slate-50 gap-2">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-800">Vista Previa del Informe</h2>
+            <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-bold truncate max-w-[200px]">
+              {studentName}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDispatchToDreamClass}
+              disabled={isCopyingImage}
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-70"
+              title="Copiar imagen del reporte y abrir DreamClass"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>{isCopyingImage ? 'Preparando...' : 'Despachar a DreamClass'}</span>
+            </button>
             <button
               onClick={handleExport}
               disabled={isExporting}
-              className="flex items-center gap-2 bg-[#144C8A] hover:bg-[#0f3d70] text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-70"
+              className="flex items-center gap-1.5 bg-[#144C8A] hover:bg-[#0f3d70] text-white px-3.5 py-2 rounded-lg text-xs font-medium transition-colors shadow-sm disabled:opacity-70"
             >
-              <Download className="w-4 h-4" />
-              {isExporting ? 'Generando imagen...' : 'Descargar como Imagen'}
+              <Download className="w-3.5 h-3.5" />
+              <span>{isExporting ? 'Generando...' : 'Descargar Imagen'}</span>
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              className="p-1.5 text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
             >
               <XIcon className="w-5 h-5" />
             </button>
           </div>
         </div>
+
+        {/* DreamClass Quick Assistant Bar */}
+        <div className="bg-emerald-50/80 border-b border-emerald-200 px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-emerald-600 text-white flex items-center justify-center shrink-0 font-bold shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5" />
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+              <span className="font-bold text-emerald-950">Despacho DreamClass Mavir:</span>
+              <span className="text-[11px] text-emerald-800">
+                1 clic copia la imagen y abre DreamClass. Solo haz <strong>Ctrl + V</strong> para pegar y enviar.
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={copyMessageToClipboard}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-emerald-300 bg-white hover:bg-emerald-100/60 text-emerald-800 font-bold text-[11px] transition-all shadow-2xs active:scale-95"
+              title="Copiar mensaje de texto personalizado para el representante"
+            >
+              {copiedText ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+              <span>{copiedText ? '¡Mensaje Copiado!' : 'Copiar Mensaje'}</span>
+            </button>
+
+            <button
+              onClick={copyImageToClipboard}
+              disabled={isCopyingImage}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-emerald-300 bg-white hover:bg-emerald-100/60 text-emerald-800 font-bold text-[11px] transition-all shadow-2xs active:scale-95 disabled:opacity-70"
+              title="Copiar imagen del reporte al portapapeles"
+            >
+              {copiedImage ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+              <span>{copiedImage ? '¡Imagen Copiada!' : 'Copiar Imagen'}</span>
+            </button>
+
+            <a
+              href={DREAMCLASS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-md font-bold text-[11px] transition-all shadow-2xs"
+              title="Ir a DreamClass en portal.mavir.org"
+            >
+              <ExternalLink className="w-3 h-3" />
+              <span>Abrir Portal</span>
+            </a>
+
+            <button
+              onClick={() => setShowMessagePreview(!showMessagePreview)}
+              className="text-[10px] text-emerald-700 hover:text-emerald-900 underline font-semibold ml-1"
+            >
+              {showMessagePreview ? 'Ocultar texto' : 'Ver texto'}
+            </button>
+          </div>
+        </div>
+
+        {/* Message Preview Drawer if toggled */}
+        {showMessagePreview && (
+          <div className="bg-emerald-50 border-b border-emerald-200 p-3 text-xs">
+            <div className="max-w-2xl mx-auto bg-white p-3 rounded-lg border border-emerald-200 text-slate-700 whitespace-pre-line font-sans shadow-2xs">
+              <div className="flex justify-between items-center mb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <span>Mensaje dirigido sugerido</span>
+                <button
+                  onClick={copyMessageToClipboard}
+                  className="text-emerald-700 hover:underline flex items-center gap-0.5 lowercase"
+                >
+                  <Copy className="w-3 h-3" /> copiar
+                </button>
+              </div>
+              {directedMessage}
+            </div>
+          </div>
+        )}
 
         {/* Scrollable Report Content */}
         <div className="p-8 overflow-y-auto bg-slate-100 flex-1">
@@ -194,7 +361,7 @@ export function ReportModal({ studentName, levelName, data, onClose }: ReportMod
                       <div key={row.subject} className={`bg-white border ${subjConfig ? subjConfig.color.border : 'border-slate-100'} rounded-lg p-2 text-center shadow-sm`}>
                         <h4 className={`text-[0.55rem] font-bold uppercase tracking-widest mb-1 truncate ${subjConfig ? subjConfig.color.text : 'text-slate-700'}`} title={row.subject}>{row.subject}</h4>
                         <div className="h-16 mb-2">
-                          <ResponsiveContainer width="100%" height="100%">
+                          <ResponsiveContainer width="100%" height={64} minWidth={50} minHeight={50}>
                             <PieChart>
                               <Pie
                                 data={isZero ? [{ name: 'Sin datos', value: 1 }] : chartData}

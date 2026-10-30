@@ -37,8 +37,8 @@ export function useFirebaseData(userId: string | undefined) {
     const unsubscribeLevels = onSnapshot(levelsRef, (snapshot) => {
       const newLevels: Level[] = [];
       snapshot.forEach(doc => newLevels.push({ id: doc.id, ...doc.data() } as Level));
-      // Sort by creation time ideally, or name
-      newLevels.sort((a, b) => a.name.localeCompare(b.name));
+      // Sort by name or creation
+      newLevels.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
       setLevels(newLevels);
     }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${userId}/levels`));
 
@@ -46,7 +46,7 @@ export function useFirebaseData(userId: string | undefined) {
     const unsubscribeStudents = onSnapshot(studentsRef, (snapshot) => {
       const newStudents: Student[] = [];
       snapshot.forEach(doc => newStudents.push({ id: doc.id, ...doc.data() } as Student));
-      newStudents.sort((a, b) => a.name.localeCompare(b.name));
+      newStudents.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
       setStudents(newStudents);
       setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${userId}/students`));
@@ -57,12 +57,14 @@ export function useFirebaseData(userId: string | undefined) {
     };
   }, [userId]);
 
-  const addLevel = async (name: string) => {
+  const addLevel = async (name: string): Promise<string | undefined> => {
     if (!userId) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
     const newDocRef = doc(collection(db, 'users', userId, 'levels'));
     try {
       await setDoc(newDocRef, {
-        name,
+        name: trimmed,
         createdAt: serverTimestamp()
       });
       return newDocRef.id;
@@ -71,20 +73,40 @@ export function useFirebaseData(userId: string | undefined) {
     }
   };
 
+  const updateLevelName = async (levelId: string, newName: string): Promise<boolean> => {
+    if (!userId) return false;
+    const trimmed = newName.trim();
+    if (!trimmed) return false;
+    try {
+      await updateDoc(doc(db, 'users', userId, 'levels', levelId), {
+        name: trimmed
+      });
+      return true;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${userId}/levels/${levelId}`);
+      return false;
+    }
+  };
+
   const deleteLevel = async (levelId: string): Promise<boolean> => {
     if (!userId) return false;
     try {
-      const batch = writeBatch(db);
-      batch.delete(doc(db, 'users', userId, 'levels', levelId));
-      
       const studentsQuery = query(collection(db, 'users', userId, 'students'), where('levelId', '==', levelId));
       const studentsSnapshot = await getDocs(studentsQuery);
-      
-      studentsSnapshot.forEach((studentDoc) => {
-        batch.delete(studentDoc.ref);
-      });
-      
-      await batch.commit();
+
+      const docsToDelete = [
+        doc(db, 'users', userId, 'levels', levelId),
+        ...studentsSnapshot.docs.map(d => d.ref)
+      ];
+
+      const batchSize = 450;
+      for (let i = 0; i < docsToDelete.length; i += batchSize) {
+        const batch = writeBatch(db);
+        const chunk = docsToDelete.slice(i, i + batchSize);
+        chunk.forEach(ref => batch.delete(ref));
+        await batch.commit();
+      }
+
       return true;
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `users/${userId}/levels/${levelId}`);
@@ -97,7 +119,7 @@ export function useFirebaseData(userId: string | undefined) {
     const newDocRef = doc(collection(db, 'users', userId, 'students'));
     try {
       await setDoc(newDocRef, {
-        name,
+        name: name.trim(),
         levelId,
         progress: initialProgress,
         createdAt: serverTimestamp(),
@@ -112,14 +134,19 @@ export function useFirebaseData(userId: string | undefined) {
   const batchUpdateStudentProgress = async (updates: Record<string, ProgressData>) => {
     if (!userId) return false;
     try {
-      const batch = writeBatch(db);
-      for (const [studentId, progress] of Object.entries(updates)) {
-        batch.update(doc(db, 'users', userId, 'students', studentId), {
-          progress,
-          updatedAt: serverTimestamp()
-        });
+      const entries = Object.entries(updates);
+      const batchSize = 450;
+      for (let i = 0; i < entries.length; i += batchSize) {
+        const batch = writeBatch(db);
+        const chunk = entries.slice(i, i + batchSize);
+        for (const [studentId, progress] of chunk) {
+          batch.update(doc(db, 'users', userId, 'students', studentId), {
+            progress,
+            updatedAt: serverTimestamp()
+          });
+        }
+        await batch.commit();
       }
-      await batch.commit();
       return true;
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/${userId}/students/batch`);
@@ -143,7 +170,7 @@ export function useFirebaseData(userId: string | undefined) {
     if (!userId) return;
     try {
       await updateDoc(doc(db, 'users', userId, 'students', studentId), {
-        name,
+        name: name.trim(),
         updatedAt: serverTimestamp()
       });
     } catch (error) {
@@ -165,6 +192,7 @@ export function useFirebaseData(userId: string | undefined) {
     students,
     loading,
     addLevel,
+    updateLevelName,
     deleteLevel,
     addStudent,
     updateStudentProgress,

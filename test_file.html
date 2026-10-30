@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<body>
+<input type="file" id="f" onchange="window.handle(event)" />
+<script>
+window.handle = function(e) {
+  const files = e.target.files;
+  console.log("Before reset:", files.length);
+  e.target.value = '';
+  console.log("After reset:", files.length);
+  const reader = new FileReader();
+  reader.onload = () => console.log("Read success!");
+  if (files[0]) reader.readAsArrayBuffer(files[0]);
+}
+</script>
+</body>
+</html>
